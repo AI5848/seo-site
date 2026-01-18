@@ -1,0 +1,7 @@
+title: "SEO Auto Blog (Test)"
+description: "Automatically generated SEO articles."
+url: ""
+baseurl: "/seo-site"   # repo adın seo-site ise böyle kalsın
+markdown: kramdown
+permalink: /:categories/:year/:month/:day/:title/
+timezone: Europe/Istanbul
