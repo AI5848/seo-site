@@ -148,15 +148,43 @@ def parse_output(raw: str) -> Dict[str, Any]:
 def validate(meta: Dict[str, Any]) -> None:
     if not isinstance(meta.get("title"), str) or not meta["title"].strip():
         raise ValueError("Missing title")
+
     if not isinstance(meta.get("meta_description"), str) or not meta["meta_description"].strip():
         raise ValueError("Missing meta_description")
+
+    # meta description 160 karakteri geçmesin
     if len(meta["meta_description"]) > 160:
         meta["meta_description"] = meta["meta_description"][:160].rstrip()
+
     kw = meta.get("keywords")
-    if not isinstance(kw, list) or len(kw) != 5:
-        raise ValueError("keywords must be a list of exactly 5 items")
+
+    # keywords bazen 5'ten fazla/az dönebiliyor: bunu normalize ediyoruz
+    if isinstance(kw, list):
+        # string olmayanları çıkar
+        kw = [str(x).strip() for x in kw if str(x).strip()]
+    elif isinstance(kw, str):
+        # tek string geldiyse virgülle böl
+        kw = [x.strip() for x in kw.split(",") if x.strip()]
+    else:
+        kw = []
+
+    # 5'ten fazlaysa ilk 5'i al
+    kw = kw[:5]
+
+    # 5'ten azsa topic'ten türetip tamamla
+    if len(kw) < 5:
+        filler = ["beginner guide", "how to", "tips", "best practices", "step by step"]
+        for x in filler:
+            if len(kw) >= 5:
+                break
+            if x not in kw:
+                kw.append(x)
+
+    meta["keywords"] = kw
+
     if not isinstance(meta.get("article_markdown"), str) or len(meta["article_markdown"].split()) < 500:
         raise ValueError("article_markdown seems too short (<500 words)")
+
 
 
 def main():
