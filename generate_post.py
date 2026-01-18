@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from huggingface_hub import InferenceClient  # HF Inference API wrapper :contentReference[oaicite:2]{index=2}
 
-MODEL_ID = "HuggingFaceH4/zephyr-7b-beta"  # popular open instruct model :contentReference[oaicite:3]{index=3}
+MODEL_ID = "google/gemma-2-2b-it" # popular open instruct model :contentReference[oaicite:3]{index=3}
 
 def slugify(text: str) -> str:
     text = text.lower().strip()
