@@ -4,9 +4,12 @@ import json
 import time
 from datetime import datetime, timezone
 
-from huggingface_hub import InferenceClient  # HF Inference API wrapper :contentReference[oaicite:2]{index=2}
+from huggingface_hub import InferenceClient
 
-MODEL_ID = "google/gemma-2-2b-it" # popular open instruct model :contentReference[oaicite:3]{index=3}
+
+# Chat/conversational uyumlu bir model seçiyoruz
+MODEL_ID = "google/gemma-2-2b-it"
+
 
 def slugify(text: str) -> str:
     text = text.lower().strip()
@@ -15,24 +18,26 @@ def slugify(text: str) -> str:
     text = re.sub(r"-+", "-", text)
     return text[:80].strip("-") or "post"
 
-def read_topics(path="topics.txt"):
+
+def read_topics(path: str = "topics.txt") -> list[str]:
     with open(path, "r", encoding="utf-8") as f:
         topics = [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
     return topics
 
-def list_existing_slugs(posts_dir="_posts"):
+
+def list_existing_slugs(posts_dir: str = "_posts") -> set[str]:
     if not os.path.isdir(posts_dir):
         return set()
     slugs = set()
     for fn in os.listdir(posts_dir):
-        # Jekyll post filename: YYYY-MM-DD-slug.md
         m = re.match(r"\d{4}-\d{2}-\d{2}-(.+)\.md$", fn)
         if m:
             slugs.add(m.group(1))
     return slugs
 
+
 def build_prompt(topic: str) -> str:
-    # Ask model to output strict JSON to make parsing reliable
+    # Modelin sadece JSON döndürmesini istiyoruz (parsing için)
     return f"""
 You are an SEO content writer.
 
@@ -56,6 +61,7 @@ Return ONLY valid JSON with this exact schema:
 }}
 """.strip()
 
+
 def call_hf(prompt: str, max_retries: int = 6) -> str:
     token = os.environ.get("HF_TOKEN", "").strip()
     if not token:
@@ -63,43 +69,43 @@ def call_hf(prompt: str, max_retries: int = 6) -> str:
 
     client = InferenceClient(model=MODEL_ID, token=token)
 
-    # Serverless inference can return 503 while the model spins up :contentReference[oaicite:4]{index=4}
     last_err = None
     for attempt in range(1, max_retries + 1):
         try:
-            # text_generation works for text-generation pipeline models
-            out = client.text_generation(
-                prompt=prompt,
-                max_new_tokens=1200,
+            # Chat API (conversational modeller için)
+            resp = client.chat_completion(
+                messages=[
+                    {"role": "system", "content": "You are a helpful SEO content writer."},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=1400,
                 temperature=0.7,
                 top_p=0.9,
-                repetition_penalty=1.1,
-                do_sample=True,
-                return_full_text=False,
             )
-            return out
+            return resp.choices[0].message.content
         except Exception as e:
             last_err = e
-            # backoff
             time.sleep(min(10 * attempt, 45))
+
     raise RuntimeError(f"HF inference failed after retries: {last_err}")
 
+
 def extract_json(text: str) -> dict:
-    # Try direct parse
     text = text.strip()
 
-    # Some models wrap in ```json ... ```
+    # Model ```json ... ``` ile dönerse temizle
     text = re.sub(r"^```json\s*", "", text)
     text = re.sub(r"^```\s*", "", text)
     text = re.sub(r"\s*```$", "", text)
 
-    # If extra text leaked, try to find first {...} block
+    # Eğer başında/sonunda fazlalık varsa ilk JSON bloğunu yakala
     if not text.startswith("{"):
         m = re.search(r"\{.*\}", text, flags=re.S)
         if m:
             text = m.group(0)
 
     return json.loads(text)
+
 
 def main():
     topics = read_topics("topics.txt")
@@ -109,7 +115,6 @@ def main():
 
     existing = list_existing_slugs("_posts")
 
-    # Pick the first topic that doesn't already exist as a slug
     chosen_topic = None
     chosen_slug = None
     for t in topics:
@@ -133,13 +138,14 @@ def main():
     article = data["article_markdown"].strip()
 
     if not isinstance(keywords, list) or len(keywords) != 5:
-        raise ValueError("Model did not return 5 keywords.")
+        raise ValueError("Model did not return exactly 5 keywords.")
 
-    # Jekyll post
+    # Jekyll post dosyasını oluştur
     os.makedirs("_posts", exist_ok=True)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     filename = f"_posts/{today}-{chosen_slug}.md"
 
+    # tag'leri basit hale getir
     tags = [slugify(k).replace("-", "_") for k in keywords]
 
     front_matter = f"""---
@@ -151,12 +157,13 @@ keywords: {json.dumps(keywords)}
 ---
 
 """
-    # Add a small “keywords” line in body for transparency (optional)
     body = f"> **SEO Keywords:** {', '.join(keywords)}\n\n{article}\n"
+
     with open(filename, "w", encoding="utf-8") as f:
         f.write(front_matter + body)
 
     print(f"Created: {filename}")
+
 
 if __name__ == "__main__":
     main()
